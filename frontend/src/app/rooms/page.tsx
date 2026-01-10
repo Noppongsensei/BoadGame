@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -10,6 +12,7 @@ export default function RoomsPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const { rooms, isLoading, error, fetchOpenRooms } = useRoomStore();
+  const safeRooms = Array.isArray(rooms) ? rooms : [];
   
   useEffect(() => {
     // Redirect to login if not authenticated
@@ -44,7 +47,7 @@ export default function RoomsPage() {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
             {error}
           </div>
-        ) : rooms.length === 0 ? (
+        ) : safeRooms.length === 0 ? (
           <div className="bg-gray-100 dark:bg-gray-800 p-8 rounded-lg text-center">
             <p className="text-gray-600 dark:text-gray-300 mb-4">No open game rooms found.</p>
             <Link 
@@ -57,7 +60,7 @@ export default function RoomsPage() {
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {rooms.map((room) => (
+            {safeRooms.map((room) => (
               <div 
                 key={room.id}
                 className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden"
@@ -92,4 +95,3 @@ export default function RoomsPage() {
 
 // Convert page to client component
 export const dynamic = 'force-dynamic';
-export const runtime = 'client';

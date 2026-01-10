@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -119,4 +121,3 @@ export default function CreateRoomPage() {
 }
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'client';

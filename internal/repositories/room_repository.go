@@ -9,7 +9,7 @@ import (
 
 // Room status constants
 const (
-	RoomStatusOpen     = "open"
+	RoomStatusOpen     = "waiting"
 	RoomStatusPlaying  = "playing"
 	RoomStatusFinished = "finished"
 )
@@ -80,7 +80,7 @@ func (r *PostgresRoomRepository) Create(name string, hostID string, maxPlayers i
 
 	// Add the host as a player in the room
 	_, err = tx.Exec(
-		`INSERT INTO room_players (room_id, user_id) VALUES ($1, $2)`,
+		`INSERT INTO room_users (room_id, user_id) VALUES ($1, $2)`,
 		room.ID, room.HostID,
 	)
 	if err != nil {
@@ -101,7 +101,7 @@ func (r *PostgresRoomRepository) GetByID(id string) (*Room, error) {
 		`SELECT id, name, host_id, status, max_players, created_at, updated_at FROM rooms WHERE id = $1`,
 		id,
 	).Scan(&room.ID, &room.Name, &room.HostID, &room.Status, &room.MaxPlayers, &room.CreatedAt, &room.UpdatedAt)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -196,7 +196,7 @@ func (r *PostgresRoomRepository) Delete(id string) error {
 	defer tx.Rollback()
 
 	// Delete all player associations
-	_, err = tx.Exec(`DELETE FROM room_players WHERE room_id = $1`, id)
+	_, err = tx.Exec(`DELETE FROM room_users WHERE room_id = $1`, id)
 	if err != nil {
 		return err
 	}
@@ -213,7 +213,7 @@ func (r *PostgresRoomRepository) Delete(id string) error {
 // AddPlayer adds a player to a room
 func (r *PostgresRoomRepository) AddPlayer(roomID, userID string) error {
 	_, err := r.db.Exec(
-		`INSERT INTO room_players (room_id, user_id) VALUES ($1, $2)`,
+		`INSERT INTO room_users (room_id, user_id) VALUES ($1, $2)`,
 		roomID, userID,
 	)
 	return err
@@ -222,7 +222,7 @@ func (r *PostgresRoomRepository) AddPlayer(roomID, userID string) error {
 // RemovePlayer removes a player from a room
 func (r *PostgresRoomRepository) RemovePlayer(roomID, userID string) error {
 	_, err := r.db.Exec(
-		`DELETE FROM room_players WHERE room_id = $1 AND user_id = $2`,
+		`DELETE FROM room_users WHERE room_id = $1 AND user_id = $2`,
 		roomID, userID,
 	)
 	return err
@@ -233,8 +233,8 @@ func (r *PostgresRoomRepository) GetPlayers(roomID string) ([]User, error) {
 	rows, err := r.db.Query(
 		`SELECT u.id, u.username, u.created_at, u.updated_at
 		FROM users u
-		JOIN room_players rp ON u.id = rp.user_id
-		WHERE rp.room_id = $1`,
+		JOIN room_users ru ON u.id = ru.user_id
+		WHERE ru.room_id = $1`,
 		roomID,
 	)
 	if err != nil {

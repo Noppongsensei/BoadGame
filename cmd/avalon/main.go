@@ -8,7 +8,7 @@ import (
 	"avalon/internal/handlers"
 	"avalon/internal/repositories"
 	"avalon/internal/services"
-	
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -19,6 +19,11 @@ func main() {
 	// Load environment variables from .env file
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
+	}
+
+	allowedOrigins := os.Getenv("CORS_ORIGINS")
+	if allowedOrigins == "" {
+		allowedOrigins = "http://localhost:3000"
 	}
 
 	// Setup database connection
@@ -42,15 +47,13 @@ func main() {
 	go hub.Run()
 
 	// Setup Fiber app
-	app := fiber.New(fiber.Config{
-		HeaderLimit: 10 * 1024 * 1024, // เพิ่มขนาด header limit
-	})
+	app := fiber.New()
 
 	// Middleware
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:3000",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowOrigins:     allowedOrigins,
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 	}))
 

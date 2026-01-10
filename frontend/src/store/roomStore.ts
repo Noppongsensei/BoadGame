@@ -45,7 +45,8 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
       const response = await axios.get('/api/rooms');
-      set({ rooms: response.data.rooms, isLoading: false });
+      const rooms = Array.isArray(response.data?.rooms) ? response.data.rooms : [];
+      set({ rooms, isLoading: false });
     } catch (error: any) {
       set({ 
         isLoading: false, 
@@ -59,7 +60,8 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
       const response = await axios.get('/api/rooms/open');
-      set({ rooms: response.data.rooms, isLoading: false });
+      const rooms = Array.isArray(response.data?.rooms) ? response.data.rooms : [];
+      set({ rooms, isLoading: false });
     } catch (error: any) {
       set({ 
         isLoading: false, 
@@ -76,7 +78,7 @@ export const useRoomStore = create<RoomState>((set, get) => ({
       const newRoom = response.data;
       
       set(state => ({ 
-        rooms: [...state.rooms, newRoom],
+        rooms: [...(Array.isArray(state.rooms) ? state.rooms : []), newRoom],
         currentRoom: newRoom,
         isLoading: false 
       }));

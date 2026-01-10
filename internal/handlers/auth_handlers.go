@@ -1,6 +1,9 @@
+// d:\Boadgame\internal\handlers\auth_handlers.go
 package handlers
 
 import (
+	"errors"
+	"strings"
 	"time"
 
 	"avalon/internal/services"
@@ -9,52 +12,53 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-// JWT secret key
-var jwtSecret = []byte("your-secret-key") // In production, use environment variables
+// jwtSecret is the secret key for JWT signing
+var jwtSecret = []byte("your-secret-key") // ควรย้ายไปเป็น environment variable
 
-// RegisterRequest represents the request body for user registration
-type RegisterRequest struct {
+// Claims represents JWT claims
+type Claims struct {
+	UserID   string `json:"user_id"`
 	Username string `json:"username"`
-	Password string `json:"password"`
+	jwt.RegisteredClaims
 }
 
-// LoginRequest represents the request body for user login
+// LoginRequest represents the login request body
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-// AuthResponse represents the response for authentication endpoints
-type AuthResponse struct {
-	User  interface{} `json:"user"`
-	Token string      `json:"token"`
-}
-
-// Claims represents the JWT claims
-type Claims struct {
-	UserID   string `json:"user_id"`
+// RegisterRequest represents the register request body
+type RegisterRequest struct {
 	Username string `json:"username"`
-	jwt.StandardClaims
+	Password string `json:"password"`
 }
 
-// registerHandler handles user registration
+// AuthResponse represents the authentication response
+type AuthResponse struct {
+	Token string `json:"token"`
+	User  struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+	} `json:"user"`
+}
+
 func registerHandler(userService *services.UserService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req RegisterRequest
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid request body",
+				"error": "Cannot parse request body",
 			})
 		}
 
-		// Validate input
+		req.Username = strings.TrimSpace(req.Username)
 		if req.Username == "" || req.Password == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Username and password are required",
+				"error": "username and password are required",
 			})
 		}
 
-		// Register user
 		user, err := userService.RegisterUser(req.Username, req.Password)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -62,7 +66,6 @@ func registerHandler(userService *services.UserService) fiber.Handler {
 			})
 		}
 
-		// Generate JWT
 		token, err := generateJWT(user.ID, user.Username)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -70,31 +73,30 @@ func registerHandler(userService *services.UserService) fiber.Handler {
 			})
 		}
 
-		return c.Status(fiber.StatusCreated).JSON(AuthResponse{
-			User:  user,
-			Token: token,
-		})
+		response := AuthResponse{Token: token}
+		response.User.ID = user.ID
+		response.User.Username = user.Username
+
+		return c.Status(fiber.StatusCreated).JSON(response)
 	}
 }
 
-// loginHandler handles user login
 func loginHandler(userService *services.UserService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req LoginRequest
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid request body",
+				"error": "Cannot parse request body",
 			})
 		}
 
-		// Validate input
+		req.Username = strings.TrimSpace(req.Username)
 		if req.Username == "" || req.Password == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Username and password are required",
+				"error": "username and password are required",
 			})
 		}
 
-		// Authenticate user
 		user, err := userService.AuthenticateUser(req.Username, req.Password)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -102,7 +104,6 @@ func loginHandler(userService *services.UserService) fiber.Handler {
 			})
 		}
 
-		// Generate JWT
 		token, err := generateJWT(user.ID, user.Username)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -110,45 +111,53 @@ func loginHandler(userService *services.UserService) fiber.Handler {
 			})
 		}
 
-		return c.Status(fiber.StatusOK).JSON(AuthResponse{
-			User:  user,
-			Token: token,
-		})
+		response := AuthResponse{Token: token}
+		response.User.ID = user.ID
+		response.User.Username = user.Username
+
+		return c.Status(fiber.StatusOK).JSON(response)
 	}
 }
 
-// generateJWT generates a JWT token for authentication
+// generateJWT generates a JWT token for a user
 func generateJWT(userID, username string) (string, error) {
-	// Create claims with user information
 	claims := &Claims{
 		UserID:   userID,
 		Username: username,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(), // Token expires in 24 hours
-			IssuedAt:  time.Now().Unix(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 
-	// Create token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	// Sign token with secret key
-	return token.SignedString(jwtSecret)
-}
-
-// validateJWT validates a JWT token and returns the user ID
-func validateJWT(tokenString string) (string, error) {
-	// Parse token
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
+	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
 		return "", err
 	}
 
-	// Validate token
+	return tokenString, nil
+}
+
+// validateJWT validates a JWT token and returns the user ID
+func validateJWT(tokenString string) (string, error) {
+	tokenString = strings.TrimSpace(tokenString)
+	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+	if tokenString == "" {
+		return "", errors.New("missing token")
+	}
+
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
 		return claims.UserID, nil
 	}
+
 	return "", jwt.ErrSignatureInvalid
 }

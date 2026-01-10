@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -12,7 +14,7 @@ export default function RoomPage() {
   const params = useParams();
   const roomId = params?.id as string;
   
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, token, isAuthenticated } = useAuthStore();
   const { currentRoom, isLoading: isRoomLoading, error: roomError, fetchRoom, joinRoom, leaveRoom, startGame } = useRoomStore();
   const { initGame, connectWebSocket } = useGameStore();
   
@@ -44,11 +46,11 @@ export default function RoomPage() {
       fetchRoom(roomId);
       
       // Connect to WebSocket if authenticated
-      if (user?.token) {
-        connectWebSocket(user.token, roomId);
+      if (token) {
+        connectWebSocket(token, roomId);
       }
     }
-  }, [isAuthenticated, router, roomId, fetchRoom, user, connectWebSocket]);
+  }, [isAuthenticated, router, roomId, fetchRoom, token, connectWebSocket]);
   
   // Handle joining room
   const handleJoinRoom = async () => {
@@ -262,4 +264,3 @@ export default function RoomPage() {
 }
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'client';

@@ -1,7 +1,9 @@
+"use client";
+
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Loader, Users, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ArrowLeft, Loader, Users, ShieldCheck, XCircle, ThumbsUp, ThumbsDown } from 'lucide-react';
 
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/store/roomStore';
@@ -31,7 +33,7 @@ export default function GamePage() {
   const params = useParams();
   const roomId = params?.id as string;
   
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, token, isAuthenticated } = useAuthStore();
   const { currentRoom } = useRoomStore();
   const { 
     gameState, 
@@ -66,8 +68,8 @@ export default function GamePage() {
       getGameState(roomId);
       
       // Connect to WebSocket
-      if (user?.token) {
-        connectWebSocket(user.token, roomId);
+      if (token) {
+        connectWebSocket(token, roomId);
       }
     }
     
@@ -79,7 +81,7 @@ export default function GamePage() {
     }, 5000);
     
     return () => clearInterval(interval);
-  }, [isAuthenticated, router, roomId, user, getGameState, connectWebSocket]);
+  }, [isAuthenticated, router, roomId, token, getGameState, connectWebSocket]);
   
   // Handle selecting a player for a quest
   const handleSelectPlayer = (playerId: string) => {
@@ -209,7 +211,7 @@ export default function GamePage() {
                   }`}
                 >
                   {quest.status === 'success' ? <ShieldCheck className="h-8 w-8" /> :
-                   quest.status === 'fail' ? <ShieldX className="h-8 w-8" /> :
+                   quest.status === 'fail' ? <XCircle className="h-8 w-8" /> :
                    quest.round}
                 </div>
               ))}
@@ -349,7 +351,7 @@ export default function GamePage() {
                         onClick={() => handleQuestAction(false)}
                         className="bg-red-500 text-white rounded-lg p-4 flex flex-col items-center"
                       >
-                        <ShieldX className="h-10 w-10 mb-1" />
+                        <XCircle className="h-10 w-10 mb-1" />
                         <span>Fail</span>
                       </button>
                     )}
@@ -479,4 +481,3 @@ export default function GamePage() {
 }
 
 export const dynamic = 'force-dynamic';
-export const runtime = 'client';
