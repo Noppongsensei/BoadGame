@@ -114,4 +114,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Set default axios base URL
-axios.defaults.baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+axios.defaults.baseURL =
+  typeof window !== 'undefined'
+    ? ''
+    : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';

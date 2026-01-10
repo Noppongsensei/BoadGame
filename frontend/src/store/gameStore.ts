@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { useRoomStore } from './roomStore';
 
 // Define game state types
 interface Player {
@@ -33,7 +34,7 @@ interface GameState {
 }
 
 // Define the WebSocket message type
-interface WSMessage {
+export interface WSMessage {
   type: string;
   room_id?: string;
   user_id?: string;
@@ -148,6 +149,31 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
           case 'game.state_update':
             // Update game state when server sends an update
             set({ gameState: message.payload });
+            break;
+            
+          case 'room.player_joined':
+          case 'room.player_left':
+          case 'room.updated':
+            // Fetch room data to update player list or room status
+            if (message.room_id) {
+              // Use roomStore to update currentRoom
+              const roomStore = useRoomStore.getState();
+              roomStore.fetchRoom(message.room_id);
+              console.log(`Room updated: ${message.type}`);
+            }
+            break;
+            
+          case 'room.game_started':
+            // Handle game start notification (redirect non-host players)
+            if (message.room_id) {
+              const roomStore = useRoomStore.getState();
+              roomStore.fetchRoom(message.room_id);
+              
+              // If this is sent to all players, they can navigate to game
+              if (typeof window !== 'undefined') {
+                window.location.href = `/game/${message.room_id}`;
+              }
+            }
             break;
           
           case 'system.error':

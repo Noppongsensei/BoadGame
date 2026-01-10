@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Users, Play, Loader, UserPlus } from 'lucide-react';
 
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/store/roomStore';
-import { useGameStore } from '@/store/gameStore';
+import { useGameStore, type WSMessage } from '@/store/gameStore';
 
 export default function RoomPage() {
   const router = useRouter();
   const params = useParams();
+  const pathname = usePathname();
   const roomId = params?.id as string;
   
   const { user, token, isAuthenticated } = useAuthStore();
@@ -49,8 +50,17 @@ export default function RoomPage() {
       if (token) {
         connectWebSocket(token, roomId);
       }
+
+      // Save room ID to sessionStorage to handle page refresh
+      sessionStorage.setItem('currentRoomId', roomId);
+    } else if (typeof window !== 'undefined') {
+      // If roomId is missing but we have it in sessionStorage, restore it
+      const storedRoomId = sessionStorage.getItem('currentRoomId');
+      if (storedRoomId && pathname === '/rooms') {
+        router.replace(`/rooms/${storedRoomId}`);
+      }
     }
-  }, [isAuthenticated, router, roomId, fetchRoom, token, connectWebSocket]);
+  }, [isAuthenticated, router, roomId, fetchRoom, token, connectWebSocket, pathname]);
   
   // Handle joining room
   const handleJoinRoom = async () => {
@@ -92,6 +102,17 @@ export default function RoomPage() {
       await startGame(roomId);
       // Initialize the game session
       await initGame(roomId, 'avalon');
+      
+      // Send WebSocket notification that game started (for all players)
+      if (token) {
+        const gameStore = useGameStore.getState();
+        gameStore.sendMessage({
+          type: 'room.game_started',
+          room_id: roomId,
+          payload: { status: 'playing' }
+        });
+      }
+      
       // Navigate to game page
       router.push(`/game/${roomId}`);
     } catch (err: any) {

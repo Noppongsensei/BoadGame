@@ -17,8 +17,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     environment:
-      - NEXT_PUBLIC_API_URL=https://avalon-thai.com
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     restart: unless-stopped
 
   backend:
@@ -27,7 +29,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - PORT=8080
-      - CORS_ORIGINS=https://avalon-thai.com
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=postgres

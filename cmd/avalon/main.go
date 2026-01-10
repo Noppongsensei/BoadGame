@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"avalon/internal/handlers"
 	"avalon/internal/repositories"
@@ -30,6 +31,16 @@ func main() {
 	db, err := repositories.NewPostgresDB()
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	// Initialize schema (retry a few times in case Postgres is still starting)
+	for i := 0; i < 10; i++ {
+		if err := db.InitSchema(); err == nil {
+			break
+		} else if i == 9 {
+			log.Fatalf("Failed to initialize database schema: %v", err)
+		}
+		time.Sleep(2 * time.Second)
 	}
 
 	// Setup repositories
