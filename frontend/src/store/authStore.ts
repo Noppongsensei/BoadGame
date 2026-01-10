@@ -46,10 +46,13 @@ export const useAuthStore = create<AuthState>()(
           
           // Set the token in axios default headers
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        } catch (error) {
+        } catch (error: unknown) {
+          const errorMessage = axios.isAxiosError(error)
+            ? (error.response?.data as any)?.error || 'Failed to login'
+            : 'Failed to login';
           set({ 
             isLoading: false, 
-            error: error.response?.data?.error || 'Failed to login' 
+            error: errorMessage 
           });
           throw error;
         }
@@ -71,10 +74,13 @@ export const useAuthStore = create<AuthState>()(
           
           // Set the token in axios default headers
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        } catch (error) {
+        } catch (error: unknown) {
+          const errorMessage = axios.isAxiosError(error)
+            ? (error.response?.data as any)?.error || 'Failed to register'
+            : 'Failed to register';
           set({ 
             isLoading: false, 
-            error: error.response?.data?.error || 'Failed to register' 
+            error: errorMessage 
           });
           throw error;
         }

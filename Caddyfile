@@ -1,0 +1,17 @@
+avalon-thai.com {
+	encode gzip
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy backend:8080
+	}
+
+	@ws path /ws
+	handle @ws {
+		reverse_proxy backend:8080
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

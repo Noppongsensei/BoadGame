@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
@@ -16,10 +16,16 @@ export default function CreateRoomPage() {
   const [name, setName] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(7); // Default to 7 players
   const [formError, setFormError] = useState('');
-  
-  // Redirect to login if not authenticated
+
+  useEffect(() => {
+    // Redirect to login if not authenticated
+    if (!isAuthenticated) {
+      router.push('/auth/login');
+    }
+  }, [isAuthenticated, router]);
+
+  // While redirecting / unauthenticated, render nothing
   if (!isAuthenticated) {
-    router.push('/auth/login');
     return null;
   }
   
