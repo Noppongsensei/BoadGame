@@ -1,0 +1,17 @@
+echo "# Node.js
+node_modules
+.next
+
+# Go
+/tmp
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+
+# Docker
+.dockerignore
+" > .gitignore

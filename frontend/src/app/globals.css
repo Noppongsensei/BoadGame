@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* Mobile-First Design */
+.thumb-zone {
+  @apply fixed bottom-0 left-0 right-0 flex justify-center p-4 bg-black bg-opacity-80;
+  max-height: 25vh;
+}
+
+/* Hold-to-Reveal Pattern */
+.role-card {
+  @apply relative rounded-lg bg-gradient-to-br from-primary-700 to-primary-900 p-6 shadow-lg overflow-hidden;
+  perspective: 1000px;
+  height: 200px;
+  width: 150px;
+  transform-style: preserve-3d;
+  transition: transform 0.5s;
+}
+
+.role-content {
+  @apply absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center p-4 opacity-0;
+  transform: rotateY(180deg);
+  transition: opacity 0.3s;
+  backface-visibility: hidden;
+}
+
+.role-card-front {
+  @apply absolute top-0 left-0 w-full h-full flex flex-col items-center justify-center p-4;
+  backface-visibility: hidden;
+}
+
+.role-card.reveal .role-content {
+  @apply opacity-100;
+}
+
+.role-card.reveal {
+  transform: rotateY(180deg);
+}
+
+/* Mobile Bottom Navigation */
+.bottom-nav {
+  @apply fixed bottom-0 left-0 right-0 bg-gray-900 flex justify-around items-center py-3 px-4 shadow-lg;
+  z-index: 50;
+}
+
+.bottom-nav-item {
+  @apply flex flex-col items-center text-gray-400;
+}
+
+.bottom-nav-item.active {
+  @apply text-primary-500;
+}
