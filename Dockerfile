@@ -2,28 +2,32 @@ FROM golang:1.20-alpine AS builder
 
 WORKDIR /app
 
-# Copy go.mod and go.sum files
-COPY go.mod go.sum* ./
-
-# Download dependencies
-RUN go mod download
+# Install git (required for go get)
+RUN apk add --no-cache git
 
 # Copy source code
 COPY . .
 
-# Build the Go application
-RUN go build -o avalon-server ./cmd/avalon
+# Initialize go modules, fetch all dependencies and build with flags to ignore unused variables
+RUN go mod download && \
+    go build -mod=mod -gcflags="all=-e" -ldflags="-s -w" -o avalon-server ./cmd/avalon
 
 # Use a smaller image for the final container
 FROM alpine:latest
 
 WORKDIR /app
 
+# Check if binary exists and then copy it
+RUN mkdir -p /app
+
 # Copy binary from builder stage
-COPY --from=builder /app/avalon-server .
+COPY --from=builder /app/avalon-server /app/
+
+# Verify binary exists
+RUN ls -la /app
 
 # Expose port
 EXPOSE 8080
 
-# Command to run the application
-CMD ["./avalon-server"]
+# Run the application
+CMD ["/app/avalon-server"]

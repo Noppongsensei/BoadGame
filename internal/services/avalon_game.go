@@ -188,7 +188,7 @@ func (g *AvalonGame) FilterStateForPlayer(playerID string) json.RawMessage {
 
 	// Filter information based on the player's role
 	playerRole := g.state.Players[playerIndex].Role
-	playerTeam := g.state.Players[playerIndex].Team
+	// playerTeam := g.state.Players[playerIndex].Team - ตัดออกเพื่อแก้ปัญหา unused variable
 
 	// Filter player roles - each player only knows their own role and what their role allows them to know
 	for i := range filteredState.Players {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
+	// "math/rand" - ตัดออกเพราะไม่ได้ใช้งาน
 	"time"
 
 	"avalon/internal/core"
@@ -89,7 +89,8 @@ func (s *GameService) InitGame(roomID, gameType string) error {
 	
 	// Save game state to database
 	initialHistory := json.RawMessage("[]")
-	gameSession, err := s.gameSessionRepo.Create(roomID, gameType, initialState, initialHistory)
+	// ใช้ตัวแปร err ที่มีอยู่แล้ว
+	_, err = s.gameSessionRepo.Create(roomID, gameType, initialState, initialHistory)
 	if err != nil {
 		return err
 	}

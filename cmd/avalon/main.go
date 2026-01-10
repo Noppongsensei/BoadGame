@@ -42,13 +42,16 @@ func main() {
 	go hub.Run()
 
 	// Setup Fiber app
-	app := fiber.New()
-	
+	app := fiber.New(fiber.Config{
+		HeaderLimit: 10 * 1024 * 1024, // เพิ่มขนาด header limit
+	})
+
 	// Middleware
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept",
+		AllowOrigins: "http://localhost:3000",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowCredentials: true,
 	}))
 
 	// Setup handlers

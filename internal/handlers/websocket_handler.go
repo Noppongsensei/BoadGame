@@ -3,14 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"log"
-	"strings"
 	
 	"avalon/internal/services"
 	
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/google/uuid"
 )
 
 // websocketHandler handles WebSocket connections
