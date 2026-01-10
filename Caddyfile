@@ -1,8 +1,8 @@
-{
-	auto_https disable_redirects
-}
+# Production Caddyfile configuration
+# Caddy จะจัดการ HTTPS และ SSL certificates โดยอัตโนมัติ
 
-avalon-thai.com {
+# Main production domain
+avalon-thai.com {  # เปลี่ยนเป็นโดเมนจริงที่ใช้
 	encode gzip
 
 	@api path /api/*
@@ -20,7 +20,10 @@ avalon-thai.com {
 	}
 }
 
-http://localhost, http://127.0.0.1 {
+# Local development configuration
+# ใช้สำหรับทดสอบบน localhost เท่านั้น
+# ถ้าต้องการทดสอบบน localhost ให้นำ comment ออก
+# http://localhost, http://127.0.0.1 {
 	encode gzip
 
 	@api path /api/*

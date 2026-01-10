@@ -98,13 +98,18 @@ export default function RoomPage() {
     setError(null);
     
     try {
+      console.log('Starting game for room:', roomId);
       // Start the game in the room
       await startGame(roomId);
+      console.log('Game started in backend');
+
       // Initialize the game session
       await initGame(roomId, 'avalon');
+      console.log('Game session initialized');
       
       // Send WebSocket notification that game started (for all players)
       if (token) {
+        console.log('Sending WebSocket notification');
         const gameStore = useGameStore.getState();
         gameStore.sendMessage({
           type: 'room.game_started',
@@ -113,9 +118,18 @@ export default function RoomPage() {
         });
       }
       
-      // Navigate to game page
-      router.push(`/game/${roomId}`);
+      // Navigate to game page - use direct navigation instead of router
+      // This ensures we definitely navigate even if there's an issue with Next.js router
+      console.log('Redirecting to game page');
+      
+      // Short timeout to ensure WebSocket message is sent before navigation
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.location.href = `/game/${roomId}`;
+        }
+      }, 500);
     } catch (err: any) {
+      console.error('Error starting game:', err);
       setError(err.message || 'Failed to start game');
       setIsStarting(false);
     }
@@ -124,68 +138,75 @@ export default function RoomPage() {
   // If loading, show loading spinner
   if (isRoomLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader className="h-12 w-12 text-primary-600 animate-spin" />
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-primary-300 border-t-primary-600"></div>
       </div>
     );
   }
   
   return (
-    <div className="min-h-screen p-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="mb-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
           <Link 
             href="/rooms"
-            className="flex items-center text-primary-600 hover:text-primary-700"
+            className="flex items-center text-primary-600 hover:text-primary-700 transition-colors duration-200 font-medium"
           >
-            <ArrowLeft className="h-5 w-5 mr-1" />
+            <ArrowLeft className="h-5 w-5 mr-2" />
             <span>Back to Rooms</span>
           </Link>
         </div>
         
         {(error || roomError) && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg shadow-sm mb-6">
             {error || roomError}
           </div>
         )}
         
         {currentRoom && (
-          <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700">
             {/* Room header */}
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h1 className="text-2xl font-bold">{currentRoom.name}</h1>
-              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mt-2">
-                <Users className="h-4 w-4 mr-1" />
-                <span>
+            <div className="p-8 border-b border-gray-100 dark:border-gray-700">
+              <div className="flex justify-between items-start mb-4">
+                <h1 className="text-3xl font-medium tracking-tight text-gray-900 dark:text-white">{currentRoom.name}</h1>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${currentRoom.status === 'playing' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>
+                  {currentRoom.status}
+                </span>
+              </div>
+              
+              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                <Users className="h-4 w-4 mr-2" />
+                <span className="font-medium">
                   {currentRoom.players?.length || 0} / {currentRoom.max_players} players
                 </span>
-                <span className="mx-2">•</span>
-                <span className="capitalize">{currentRoom.status}</span>
+                <span className="mx-2 text-gray-300 dark:text-gray-600">•</span>
+                <span>Created by {currentRoom.players?.find(p => p.id === currentRoom.host_id)?.username || 'Unknown'}</span>
               </div>
             </div>
             
             {/* Player list */}
-            <div className="p-6">
-              <h2 className="text-lg font-medium mb-4">Players</h2>
+            <div className="p-8">
+              <h2 className="text-xl font-medium mb-6 text-gray-900 dark:text-gray-100">Players</h2>
               
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {currentRoom.players?.map(player => (
                   <div 
                     key={player.id}
-                    className={`flex items-center justify-between p-3 rounded-lg ${
-                      player.id === currentRoom.host_id 
-                        ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
-                        : 'bg-gray-50 dark:bg-gray-700/50'
-                    }`}
+                    className={`flex items-center justify-between p-4 rounded-lg transition-all ${player.id === user?.id ? 'bg-primary-50 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-800' : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700'}`}
                   >
-                    <div className="flex items-center">
-                      <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-300 font-medium">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-medium ${player.id === currentRoom.host_id ? 'bg-yellow-500 dark:bg-yellow-600' : 'bg-primary-500 dark:bg-primary-600'}`}>
                         {player.username.charAt(0).toUpperCase()}
                       </div>
-                      <span className="ml-3 font-medium">{player.username}</span>
+                      <div>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{player.username}</span>
+                        {player.id === user?.id && (
+                          <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">(You)</span>
+                        )}
+                      </div>
                     </div>
                     {player.id === currentRoom.host_id && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                      <span className="text-xs px-3 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400">
                         Host
                       </span>
                     )}
@@ -194,24 +215,24 @@ export default function RoomPage() {
               </div>
               
               {/* Actions */}
-              <div className="mt-8 space-y-4">
+              <div className="mt-10 space-y-4">
                 {/* Join button for non-members */}
                 {!isInRoom && !isGameInProgress && !isRoomFull && (
                   <button
                     onClick={handleJoinRoom}
                     disabled={isJoining}
-                    className={`w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
-                      isJoining ? 'opacity-70 cursor-not-allowed' : ''
+                    className={`w-full flex justify-center items-center py-3.5 px-6 rounded-lg shadow-sm text-base font-medium text-white bg-primary-500 hover:bg-primary-600 transition-all duration-200 ${
+                      isJoining ? 'opacity-70 cursor-not-allowed' : 'hover:shadow'
                     }`}
                   >
                     {isJoining ? (
                       <>
-                        <Loader className="h-4 w-4 animate-spin mr-2" />
+                        <div className="h-5 w-5 mr-3 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
                         Joining...
                       </>
                     ) : (
                       <>
-                        <UserPlus className="h-4 w-4 mr-2" />
+                        <UserPlus className="h-5 w-5 mr-3" />
                         Join Room
                       </>
                     )}
@@ -223,18 +244,18 @@ export default function RoomPage() {
                   <button
                     onClick={handleStartGame}
                     disabled={isStarting}
-                    className={`w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 ${
-                      isStarting ? 'opacity-70 cursor-not-allowed' : ''
+                    className={`w-full flex justify-center items-center py-3.5 px-6 rounded-lg shadow-sm text-base font-medium text-white bg-green-500 hover:bg-green-600 transition-all duration-200 ${
+                      isStarting ? 'opacity-70 cursor-not-allowed' : 'hover:shadow'
                     }`}
                   >
                     {isStarting ? (
                       <>
-                        <Loader className="h-4 w-4 animate-spin mr-2" />
+                        <div className="h-5 w-5 mr-3 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
                         Starting Game...
                       </>
                     ) : (
                       <>
-                        <Play className="h-4 w-4 mr-2" />
+                        <Play className="h-5 w-5 mr-3" />
                         Start Game
                       </>
                     )}
@@ -245,9 +266,9 @@ export default function RoomPage() {
                 {isInRoom && isGameInProgress && (
                   <Link
                     href={`/game/${roomId}`}
-                    className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    className="w-full flex justify-center items-center py-3.5 px-6 rounded-lg shadow-sm text-base font-medium text-white bg-orange-500 hover:bg-orange-600 transition-all duration-200 hover:shadow"
                   >
-                    <Play className="h-4 w-4 mr-2" />
+                    <Play className="h-5 w-5 mr-3" />
                     Join Game in Progress
                   </Link>
                 )}
@@ -256,7 +277,7 @@ export default function RoomPage() {
                 {isInRoom && !isGameInProgress && (
                   <button
                     onClick={handleLeaveRoom}
-                    className="w-full flex justify-center items-center py-3 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    className="w-full flex justify-center items-center py-3.5 px-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm text-base font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
                   >
                     Leave Room
                   </button>
@@ -264,15 +285,16 @@ export default function RoomPage() {
                 
                 {/* Message for full rooms */}
                 {!isInRoom && isRoomFull && (
-                  <div className="text-center text-red-500 p-2">
-                    This room is full.
+                  <div className="mt-6 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-lg px-4 py-3 text-center text-red-700 dark:text-red-400">
+                    <p>This room is full and cannot accept more players.</p>
                   </div>
                 )}
                 
                 {/* Message for not enough players */}
                 {isHost && !isGameInProgress && !hasEnoughPlayers && (
-                  <div className="text-center text-amber-500 p-2">
-                    Need at least 5 players to start the game.
+                  <div className="mt-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-lg px-4 py-3 text-center text-amber-700 dark:text-amber-400">
+                    <p>Need at least 5 players to start the game</p>
+                    <p className="text-sm mt-1 text-amber-600 dark:text-amber-500">{5 - (currentRoom.players?.length || 0)} more player{(5 - (currentRoom.players?.length || 0)) !== 1 ? 's' : ''} needed</p>
                   </div>
                 )}
               </div>
