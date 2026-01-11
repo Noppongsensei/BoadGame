@@ -46,5 +46,5 @@ func SetupRoutes(
 	games.Get("/:roomId/history", getGameHistoryHandler(gameService))
 
 	// WebSocket route
-	app.Get("/ws", websocketHandler(hub))
+	app.Get("/ws", websocketHandler(hub, gameService))
 }

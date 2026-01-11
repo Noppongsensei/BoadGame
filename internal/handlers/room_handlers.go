@@ -8,20 +8,14 @@ import (
 	"avalon/internal/services"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v4"
 )
 
 // extractClaims extracts claims from a JWT token
 func extractClaims(token string) *Claims {
-	claims := &Claims{}
-	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
-
+	claims, err := parseJWTClaims(token)
 	if err != nil {
 		return nil
 	}
-
 	return claims
 }
 
@@ -177,6 +171,10 @@ func joinRoomHandler(roomService *services.RoomService, hub *services.Hub) fiber
 			})
 		}
 
+		if hub != nil {
+			hub.JoinRoom(userID, roomID)
+		}
+
 		// Get updated room information
 		room, err := roomService.GetRoom(roomID)
 		if err != nil {
@@ -254,6 +252,10 @@ func leaveRoomHandler(roomService *services.RoomService, hub *services.Hub) fibe
 			})
 		}
 
+		if hub != nil {
+			hub.LeaveRoom(userID)
+		}
+
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"message": "Successfully left the room",
 		})
@@ -324,11 +326,38 @@ func getRoomPlayersHandler(roomService *services.RoomService) fiber.Handler {
 		// Get room ID from URL
 		roomID := c.Params("id")
 
+		// Authenticate request
+		token := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
+		if token == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Authorization token required",
+			})
+		}
+		userID, err := validateJWT(token)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Invalid token",
+			})
+		}
+
 		// Get room
 		room, err := roomService.GetRoom(roomID)
 		if err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Room not found",
+			})
+		}
+
+		allowed := false
+		for _, p := range room.Players {
+			if p.ID == userID {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Access denied",
 			})
 		}
 

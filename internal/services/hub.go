@@ -70,7 +70,7 @@ func (h *Hub) Run() {
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client.ID] = client
-			
+
 			// Add client to room if roomID is specified
 			if client.RoomID != "" {
 				if _, ok := h.rooms[client.RoomID]; !ok {
@@ -79,14 +79,17 @@ func (h *Hub) Run() {
 				h.rooms[client.RoomID][client.ID] = true
 			}
 			h.mu.Unlock()
-			
+
 			// Notify client that they are connected
 			connectMsg := &Message{
 				Type:   "system.connected",
 				UserID: client.ID,
 			}
 			jsonMsg, _ := json.Marshal(connectMsg)
-			client.Send <- jsonMsg
+			select {
+			case client.Send <- jsonMsg:
+			default:
+			}
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -99,7 +102,7 @@ func (h *Hub) Run() {
 						delete(h.rooms, client.RoomID)
 					}
 				}
-				
+
 				// Close channel and delete client
 				close(client.Send)
 				delete(h.clients, client.ID)
@@ -107,22 +110,28 @@ func (h *Hub) Run() {
 			h.mu.Unlock()
 
 		case message := <-h.broadcast:
+			jsonMsg, _ := json.Marshal(message)
 			h.mu.RLock()
 			if roomClients, ok := h.rooms[message.RoomID]; ok {
 				for clientID := range roomClients {
 					if client, ok := h.clients[clientID]; ok {
-						jsonMsg, _ := json.Marshal(message)
-						client.Send <- jsonMsg
+						select {
+						case client.Send <- jsonMsg:
+						default:
+						}
 					}
 				}
 			}
 			h.mu.RUnlock()
 
 		case message := <-h.direct:
+			jsonMsg, _ := json.Marshal(message)
 			h.mu.RLock()
 			if client, ok := h.clients[message.UserID]; ok {
-				jsonMsg, _ := json.Marshal(message)
-				client.Send <- jsonMsg
+				select {
+				case client.Send <- jsonMsg:
+				default:
+				}
 			}
 			h.mu.RUnlock()
 		}
@@ -161,7 +170,7 @@ func (h *Hub) ClientExists(clientID string) bool {
 func (h *Hub) GetClientsInRoom(roomID string) []*Client {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	
+
 	var clients []*Client
 	if roomClients, ok := h.rooms[roomID]; ok {
 		for clientID := range roomClients {
@@ -177,7 +186,7 @@ func (h *Hub) GetClientsInRoom(roomID string) []*Client {
 func (h *Hub) JoinRoom(clientID, roomID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	if client, ok := h.clients[clientID]; ok {
 		// Remove from previous room if any
 		if client.RoomID != "" && h.rooms[client.RoomID] != nil {
@@ -187,7 +196,7 @@ func (h *Hub) JoinRoom(clientID, roomID string) {
 				delete(h.rooms, client.RoomID)
 			}
 		}
-		
+
 		// Add to new room
 		client.RoomID = roomID
 		if _, ok := h.rooms[roomID]; !ok {
@@ -201,7 +210,7 @@ func (h *Hub) JoinRoom(clientID, roomID string) {
 func (h *Hub) LeaveRoom(clientID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	if client, ok := h.clients[clientID]; ok && client.RoomID != "" {
 		if h.rooms[client.RoomID] != nil {
 			delete(h.rooms[client.RoomID], clientID)
@@ -216,58 +225,14 @@ func (h *Hub) LeaveRoom(clientID string) {
 
 // Run handles WebSocket connection for each client
 func (c *Client) Run() {
-	// Start a goroutine for sending messages to the client
-	go func() {
-		defer c.Conn.Close()
-		for message := range c.Send {
-			c.mu.Lock()
-			if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
-				log.Printf("Error writing message to client %s: %v", c.ID, err)
-				c.mu.Unlock()
-				return
-			}
+	defer c.Conn.Close()
+	for message := range c.Send {
+		c.mu.Lock()
+		if err := c.Conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			log.Printf("Error writing message to client %s: %v", c.ID, err)
 			c.mu.Unlock()
+			return
 		}
-	}()
-
-	// Read messages from the client
-	for {
-		_, msg, err := c.Conn.ReadMessage()
-		if err != nil {
-			log.Printf("Client %s disconnected: %v", c.ID, err)
-			c.Hub.UnregisterClient(c)
-			break
-		}
-
-		// Parse the message
-		var message Message
-		if err := json.Unmarshal(msg, &message); err != nil {
-			log.Printf("Error unmarshaling message from client %s: %v", c.ID, err)
-			continue
-		}
-
-		// Ensure the message has the correct userID
-		message.UserID = c.ID
-
-		// Process the message based on its type
-		switch message.Type {
-		case "chat.message":
-			// Broadcast chat message to the room
-			c.Hub.BroadcastToRoom(&message)
-		case "game.action":
-			// Process game action (this will be handled by the game service)
-			c.Hub.BroadcastToRoom(&message)
-		case "room.join":
-			// Join room
-			if message.RoomID != "" {
-				c.Hub.JoinRoom(c.ID, message.RoomID)
-			}
-		case "room.leave":
-			// Leave room
-			c.Hub.LeaveRoom(c.ID)
-		default:
-			// Unknown message type
-			log.Printf("Unknown message type from client %s: %s", c.ID, message.Type)
-		}
+		c.mu.Unlock()
 	}
 }

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	// "math/rand" - ตัดออกเพราะไม่ได้ใช้งาน
+	"sync"
 	"time"
 
 	"avalon/internal/core"
@@ -16,6 +18,8 @@ type GameService struct {
 	roomRepo        repositories.RoomRepository
 	gameSessionRepo repositories.GameSessionRepository
 	games           map[string]core.GameEngine // Map of roomID to game instance
+	roomLocks       map[string]*sync.Mutex
+	mu              sync.RWMutex
 }
 
 // NewGameService creates a new game service
@@ -24,7 +28,19 @@ func NewGameService(roomRepo repositories.RoomRepository, gameSessionRepo reposi
 		roomRepo:        roomRepo,
 		gameSessionRepo: gameSessionRepo,
 		games:           make(map[string]core.GameEngine),
+		roomLocks:       make(map[string]*sync.Mutex),
 	}
+}
+
+func (s *GameService) getRoomLock(roomID string) *sync.Mutex {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if l, ok := s.roomLocks[roomID]; ok {
+		return l
+	}
+	l := &sync.Mutex{}
+	s.roomLocks[roomID] = l
+	return l
 }
 
 // InitGame initializes a new game for a room
@@ -62,31 +78,31 @@ func (s *GameService) InitGame(roomID, gameType string) error {
 	// Create initial game state based on game type
 	var gameEngine core.GameEngine
 	var initialState json.RawMessage
-	
+
 	switch gameType {
 	case "avalon":
 		// Initialize Avalon game (will be implemented separately in avalon_game.go)
 		avalonGame := NewAvalonGame()
 		options := AvalonOptions{
-			EnableMerlin:    true,
-			EnablePercival:  true,
-			EnableMorgana:   len(players) >= 7,
-			EnableOberon:    len(players) >= 8,
-			EnableMordred:   len(players) >= 9,
-			UseStrictRules:  true,
+			EnableMerlin:   true,
+			EnablePercival: true,
+			EnableMorgana:  len(players) >= 7,
+			EnableOberon:   len(players) >= 8,
+			EnableMordred:  len(players) >= 9,
+			UseStrictRules: true,
 		}
-		
+
 		optionsJson, _ := json.Marshal(options)
 		if err := avalonGame.Init(corePlayers, optionsJson); err != nil {
 			return err
 		}
-		
+
 		gameEngine = avalonGame
 		initialState = avalonGame.GetState()
 	default:
 		return fmt.Errorf("unsupported game type: %s", gameType)
 	}
-	
+
 	// Save game state to database
 	initialHistory := json.RawMessage("[]")
 	// ใช้ตัวแปร err ที่มีอยู่แล้ว
@@ -96,21 +112,49 @@ func (s *GameService) InitGame(roomID, gameType string) error {
 	}
 
 	// Store game instance in memory
+	s.mu.Lock()
 	s.games[roomID] = gameEngine
+	if _, ok := s.roomLocks[roomID]; !ok {
+		s.roomLocks[roomID] = &sync.Mutex{}
+	}
+	s.mu.Unlock()
 
 	return nil
 }
 
 // ProcessGameAction processes a game action
 func (s *GameService) ProcessGameAction(roomID, playerID string, actionType string, payload json.RawMessage) error {
+	lock := s.getRoomLock(roomID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	players, err := s.roomRepo.GetPlayers(roomID)
+	if err != nil {
+		return err
+	}
+	allowed := false
+	for _, p := range players {
+		if p.ID == playerID {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return errors.New("player is not in room")
+	}
+
 	// Check if game exists for the room
+	s.mu.RLock()
 	gameEngine, exists := s.games[roomID]
+	s.mu.RUnlock()
 	if !exists {
 		// Try to load from database
 		if err := s.loadGame(roomID); err != nil {
 			return err
 		}
+		s.mu.RLock()
 		gameEngine = s.games[roomID]
+		s.mu.RUnlock()
 	}
 
 	// Create action object
@@ -133,7 +177,10 @@ func (s *GameService) ProcessGameAction(roomID, playerID string, actionType stri
 	if err != nil {
 		return err
 	}
-	
+	if gameSession == nil {
+		return errors.New("no game session found for room")
+	}
+
 	if err := s.gameSessionRepo.UpdateGameState(gameSession.ID, gameState); err != nil {
 		return err
 	}
@@ -143,17 +190,17 @@ func (s *GameService) ProcessGameAction(roomID, playerID string, actionType stri
 	if err := json.Unmarshal(gameSession.History, &history); err != nil {
 		return err
 	}
-	
+
 	historyEntry := map[string]interface{}{
 		"playerID":   playerID,
 		"actionType": actionType,
 		"payload":    payload,
 		"timestamp":  time.Now(),
 	}
-	
+
 	history = append(history, historyEntry)
 	historyJson, _ := json.Marshal(history)
-	
+
 	if err := s.gameSessionRepo.UpdateHistory(gameSession.ID, historyJson); err != nil {
 		return err
 	}
@@ -167,21 +214,24 @@ func (s *GameService) ProcessGameAction(roomID, playerID string, actionType stri
 			"winners":     winners,
 			"timestamp":   time.Now(),
 		}
-		
+
 		history = append(history, winInfo)
 		historyJson, _ := json.Marshal(history)
-		
+
 		if err := s.gameSessionRepo.UpdateHistory(gameSession.ID, historyJson); err != nil {
 			return err
 		}
-		
+
 		// Update room status
 		if err := s.roomRepo.UpdateStatus(roomID, repositories.RoomStatusFinished); err != nil {
 			return err
 		}
-		
+
 		// Remove game from memory
+		s.mu.Lock()
 		delete(s.games, roomID)
+		delete(s.roomLocks, roomID)
+		s.mu.Unlock()
 	}
 
 	return nil
@@ -189,14 +239,22 @@ func (s *GameService) ProcessGameAction(roomID, playerID string, actionType stri
 
 // GetFilteredGameState returns the player-specific game state
 func (s *GameService) GetFilteredGameState(roomID, playerID string) (json.RawMessage, error) {
+	lock := s.getRoomLock(roomID)
+	lock.Lock()
+	defer lock.Unlock()
+
 	// Check if game exists for the room
+	s.mu.RLock()
 	gameEngine, exists := s.games[roomID]
+	s.mu.RUnlock()
 	if !exists {
 		// Try to load from database
 		if err := s.loadGame(roomID); err != nil {
 			return nil, err
 		}
+		s.mu.RLock()
 		gameEngine = s.games[roomID]
+		s.mu.RUnlock()
 	}
 
 	// Get filtered state for the player (implements anti-cheat)
@@ -212,7 +270,7 @@ func (s *GameService) GetGameHistory(roomID string) (json.RawMessage, error) {
 	if gameSession == nil {
 		return nil, errors.New("no game session found for room")
 	}
-	
+
 	return gameSession.History, nil
 }
 
@@ -241,7 +299,7 @@ func (s *GameService) loadGame(roomID string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Convert to core.Player objects
 	corePlayers := make([]core.Player, len(players))
 	for i, p := range players {
@@ -253,7 +311,7 @@ func (s *GameService) loadGame(roomID string) error {
 
 	// Create game instance based on game type
 	var gameEngine core.GameEngine
-	
+
 	switch gameSession.GameType {
 	case "avalon":
 		avalonGame := NewAvalonGame()
@@ -267,17 +325,22 @@ func (s *GameService) loadGame(roomID string) error {
 	}
 
 	// Store game instance in memory
+	s.mu.Lock()
 	s.games[roomID] = gameEngine
-	
+	if _, ok := s.roomLocks[roomID]; !ok {
+		s.roomLocks[roomID] = &sync.Mutex{}
+	}
+	s.mu.Unlock()
+
 	return nil
 }
 
 // AvalonOptions represents the options for an Avalon game
 type AvalonOptions struct {
-	EnableMerlin    bool `json:"enable_merlin"`
-	EnablePercival  bool `json:"enable_percival"`
-	EnableMorgana   bool `json:"enable_morgana"`
-	EnableOberon    bool `json:"enable_oberon"`
-	EnableMordred   bool `json:"enable_mordred"`
-	UseStrictRules  bool `json:"use_strict_rules"`
+	EnableMerlin   bool `json:"enable_merlin"`
+	EnablePercival bool `json:"enable_percival"`
+	EnableMorgana  bool `json:"enable_morgana"`
+	EnableOberon   bool `json:"enable_oberon"`
+	EnableMordred  bool `json:"enable_mordred"`
+	UseStrictRules bool `json:"use_strict_rules"`
 }

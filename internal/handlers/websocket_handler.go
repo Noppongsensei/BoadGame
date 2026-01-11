@@ -3,16 +3,15 @@ package handlers
 import (
 	"encoding/json"
 	"log"
-	
+
 	"avalon/internal/services"
-	
+
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v4"
 )
 
 // websocketHandler handles WebSocket connections
-func websocketHandler(hub *services.Hub) fiber.Handler {
+func websocketHandler(hub *services.Hub, gameService *services.GameService) fiber.Handler {
 	return websocket.New(func(c *websocket.Conn) {
 		// Extract JWT token from query parameters
 		token := c.Query("token")
@@ -20,27 +19,17 @@ func websocketHandler(hub *services.Hub) fiber.Handler {
 			log.Println("WebSocket connection attempt without token")
 			return
 		}
-		
-		// Validate token
-		userID, err := validateJWT(token)
+
+		claims, err := parseJWTClaims(token)
 		if err != nil {
 			log.Printf("Invalid token in WebSocket connection: %v", err)
 			return
 		}
-		
-		// Extract username from token
-		claims := &Claims{}
-		_, err = jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-			return jwtSecret, nil
-		})
-		if err != nil {
-			log.Printf("Failed to parse token claims: %v", err)
-			return
-		}
-		
+		userID := claims.UserID
+
 		// Extract room ID from query parameters (optional)
 		roomID := c.Query("room_id")
-		
+
 		// Create a new client
 		client := &services.Client{
 			ID:       userID,
@@ -50,23 +39,57 @@ func websocketHandler(hub *services.Hub) fiber.Handler {
 			Hub:      hub,
 			Send:     make(chan []byte, 256),
 		}
-		
+
 		// Register client with hub
 		hub.RegisterClient(client)
-		
+
 		// Handle WebSocket connection
 		go client.Run()
-		
+
 		// Send connection confirmation
 		welcomeMsg := map[string]interface{}{
 			"type":    "system.welcome",
 			"message": "Connected to Avalon game server",
 			"user_id": userID,
 		}
-		
+
 		welcomeJSON, _ := json.Marshal(welcomeMsg)
-		client.Send <- welcomeJSON
-		
+		select {
+		case client.Send <- welcomeJSON:
+		default:
+		}
+
+		sendError := func(roomID string, msg string) {
+			payload, _ := json.Marshal(map[string]interface{}{
+				"message": msg,
+			})
+			hub.SendToClient(&services.Message{
+				Type:    "system.error",
+				RoomID:  roomID,
+				UserID:  userID,
+				Payload: payload,
+			})
+		}
+
+		sendGameStateToRoom := func(roomID string) {
+			if gameService == nil {
+				return
+			}
+			clients := hub.GetClientsInRoom(roomID)
+			for _, roomClient := range clients {
+				state, err := gameService.GetFilteredGameState(roomID, roomClient.ID)
+				if err != nil {
+					continue
+				}
+				hub.SendToClient(&services.Message{
+					Type:    "game.state_update",
+					RoomID:  roomID,
+					UserID:  roomClient.ID,
+					Payload: state,
+				})
+			}
+		}
+
 		// Handle incoming messages
 		for {
 			_, msg, err := c.ReadMessage()
@@ -76,17 +99,17 @@ func websocketHandler(hub *services.Hub) fiber.Handler {
 				}
 				break
 			}
-			
+
 			// Parse message
 			var message services.Message
 			if err := json.Unmarshal(msg, &message); err != nil {
 				log.Printf("Error parsing WebSocket message: %v", err)
 				continue
 			}
-			
+
 			// Validate message
 			message.UserID = userID // Ensure correct user ID
-			
+
 			// Process message based on type
 			switch message.Type {
 			case "chat.message":
@@ -95,42 +118,54 @@ func websocketHandler(hub *services.Hub) fiber.Handler {
 					hub.BroadcastToRoom(&message)
 				}
 			case "game.action":
-				// Process game action (handled by game service)
-				if message.RoomID != "" {
-					hub.BroadcastToRoom(&message)
+				if message.RoomID == "" {
+					sendError("", "room_id is required")
+					continue
 				}
-			case "room.join":
-				// Join room
-				if message.RoomID != "" {
-					hub.JoinRoom(userID, message.RoomID)
-					
-					// Notify room about new player
-					joinMsg := &services.Message{
-						Type:    "room.player_joined",
-						RoomID:  message.RoomID,
-						UserID:  userID,
-						Payload: []byte(`{"username":"` + claims.Username + `"}`),
-					}
-					hub.BroadcastToRoom(joinMsg)
+				if client.RoomID == "" {
+					sendError(message.RoomID, "client is not in a room")
+					continue
 				}
-			case "room.leave":
-				// Leave room
-				if client.RoomID != "" {
-					// Notify room about player leaving
-					leaveMsg := &services.Message{
-						Type:    "room.player_left",
-						RoomID:  client.RoomID,
-						UserID:  userID,
-						Payload: []byte(`{"username":"` + claims.Username + `"}`),
-					}
-					hub.BroadcastToRoom(leaveMsg)
-					
-					// Leave room
-					hub.LeaveRoom(userID)
+				if client.RoomID != message.RoomID {
+					sendError(message.RoomID, "client is not in this room")
+					continue
 				}
+				if gameService == nil {
+					sendError(message.RoomID, "game service is not available")
+					continue
+				}
+
+				var actionEnvelope struct {
+					Type string `json:"type"`
+				}
+				if err := json.Unmarshal(message.Payload, &actionEnvelope); err != nil {
+					sendError(message.RoomID, "invalid action payload")
+					continue
+				}
+				if actionEnvelope.Type == "" {
+					sendError(message.RoomID, "action payload.type is required")
+					continue
+				}
+
+				var payloadMap map[string]interface{}
+				if err := json.Unmarshal(message.Payload, &payloadMap); err != nil {
+					sendError(message.RoomID, "invalid action payload")
+					continue
+				}
+				delete(payloadMap, "type")
+				actionPayload, _ := json.Marshal(payloadMap)
+
+				if err := gameService.ProcessGameAction(message.RoomID, userID, actionEnvelope.Type, actionPayload); err != nil {
+					sendError(message.RoomID, err.Error())
+					continue
+				}
+
+				sendGameStateToRoom(message.RoomID)
+			case "room.join", "room.leave":
+				sendError(message.RoomID, "room join/leave must be done via HTTP API")
 			}
 		}
-		
+
 		// Unregister client when connection is closed
 		hub.UnregisterClient(client)
 	})

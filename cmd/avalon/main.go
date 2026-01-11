@@ -23,6 +23,9 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
 	}
+	if err := handlers.InitJWTSecretFromEnv(); err != nil {
+		log.Fatalf("JWT configuration error: %v", err)
+	}
 
 	allowedOrigins := os.Getenv("CORS_ORIGINS")
 	if allowedOrigins == "" {

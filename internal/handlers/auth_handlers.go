@@ -3,7 +3,9 @@ package handlers
 
 import (
 	"errors"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"avalon/internal/services"
@@ -12,8 +14,59 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 )
 
-// jwtSecret is the secret key for JWT signing
-var jwtSecret = []byte("your-secret-key") // ควรย้ายไปเป็น environment variable
+var (
+	jwtSecret     []byte
+	jwtSecretOnce sync.Once
+	jwtSecretErr  error
+)
+
+func InitJWTSecretFromEnv() error {
+	jwtSecretOnce.Do(func() {
+		secret := strings.TrimSpace(os.Getenv("JWT_SECRET"))
+		if secret == "" {
+			jwtSecretErr = errors.New("JWT_SECRET is not set")
+			return
+		}
+		jwtSecret = []byte(secret)
+	})
+	return jwtSecretErr
+}
+
+func getJWTSecret() ([]byte, error) {
+	if err := InitJWTSecretFromEnv(); err != nil {
+		return nil, err
+	}
+	return jwtSecret, nil
+}
+
+func parseJWTClaims(tokenString string) (*Claims, error) {
+	tokenString = strings.TrimSpace(tokenString)
+	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+	if tokenString == "" {
+		return nil, errors.New("missing token")
+	}
+
+	secret, err := getJWTSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return secret, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !token.Valid {
+		return nil, jwt.ErrSignatureInvalid
+	}
+
+	return claims, nil
+}
 
 // Claims represents JWT claims
 type Claims struct {
@@ -121,6 +174,11 @@ func loginHandler(userService *services.UserService) fiber.Handler {
 
 // generateJWT generates a JWT token for a user
 func generateJWT(userID, username string) (string, error) {
+	secret, err := getJWTSecret()
+	if err != nil {
+		return "", err
+	}
+
 	claims := &Claims{
 		UserID:   userID,
 		Username: username,
@@ -131,7 +189,7 @@ func generateJWT(userID, username string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtSecret)
+	tokenString, err := token.SignedString(secret)
 	if err != nil {
 		return "", err
 	}
@@ -147,14 +205,21 @@ func validateJWT(tokenString string) (string, error) {
 		return "", errors.New("missing token")
 	}
 
+	secret, err := getJWTSecret()
+	if err != nil {
+		return "", err
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return secret, nil
 	})
 
 	if err != nil {
 		return "", err
 	}
-
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
 		return claims.UserID, nil
 	}
