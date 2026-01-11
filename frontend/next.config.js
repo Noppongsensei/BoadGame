@@ -1,4 +1,13 @@
 /** @type {import('next').NextConfig} */
+const getApiUrl = () => {
+    if (process.env.API_URL) {
+        return process.env.API_URL.startsWith('http')
+            ? process.env.API_URL
+            : `http://${process.env.API_URL}`
+    }
+    return 'http://localhost:8080'
+}
+
 const nextConfig = {
     reactStrictMode: true,
     output: 'standalone',
@@ -6,7 +15,7 @@ const nextConfig = {
         return [
             {
                 source: '/api/:path*',
-                destination: `${process.env.API_URL || 'http://localhost:8080'}/api/:path*`,
+                destination: `${getApiUrl()}/api/:path*`,
             },
         ]
     },
