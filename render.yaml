@@ -6,6 +6,7 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     rootDir: .
+    healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -25,7 +26,10 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: API_URL
-        value: http://avalon-backend:8080
+        fromService:
+          type: web
+          name: avalon-backend
+          property: hostport
 
 databases:
   - name: avalon-db

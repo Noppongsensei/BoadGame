@@ -20,6 +20,9 @@ FROM alpine:latest
 
 WORKDIR /app
 
+# Install CA certificates for SSL connections and Timezone data
+RUN apk add --no-cache ca-certificates tzdata
+
 # Check if binary exists and then copy it
 RUN mkdir -p /app
 

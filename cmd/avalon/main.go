@@ -14,6 +14,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/joho/godotenv"
 )
 
@@ -59,17 +60,34 @@ func main() {
 	go hub.Run()
 
 	// Setup Fiber app
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		// Allow panic recovery to return 500 instead of crashing empty
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			code := fiber.StatusInternalServerError
+			if e, ok := err.(*fiber.Error); ok {
+				code = e.Code
+			}
+			log.Printf("Error: %v", err)
+			return c.Status(code).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		},
+	})
 
-	// Add request ID middleware for tracing
+	// Add middlewares
+	app.Use(recover.New()) // Recover from panic
 	app.Use(middleware.RequestIDMiddleware())
-	// Middleware
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 	}))
+
+	// Health check
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"status": "ok"})
+	})
 
 	// Setup handlers
 	handlers.SetupRoutes(app, userService, roomService, gameService, hub)
