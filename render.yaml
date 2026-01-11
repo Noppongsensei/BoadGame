@@ -28,7 +28,7 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: API_URL
-        value: http://avalon-backend:8080
+        value: https://avalon-backend-iy2p.onrender.com
 
 databases:
   - name: avalon-db
