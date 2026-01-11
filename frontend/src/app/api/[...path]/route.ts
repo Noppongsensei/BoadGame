@@ -15,7 +15,6 @@ const buildTargetUrl = (req: NextRequest) => {
   }
 
   const reqUrl = new URL(req.url);
-  // This route is mounted at /api/[...path], so reqUrl.pathname already starts with /api/...
   const target = new URL(reqUrl.pathname + reqUrl.search, backendBaseUrl);
   return target;
 };
@@ -34,14 +33,12 @@ const proxy = async (req: NextRequest) => {
     }
 
     const headers = new Headers(req.headers);
-    // Avoid leaking the frontend host to the backend
     headers.delete('host');
 
     const init: RequestInit = {
       method: req.method,
       headers,
       redirect: 'manual',
-      // Force dynamic proxying
       cache: 'no-store',
     };
 
@@ -64,7 +61,6 @@ const proxy = async (req: NextRequest) => {
     }
 
     const resHeaders = new Headers(upstream.headers);
-    // Prevent duplicate encoding issues and let Next handle it
     resHeaders.delete('content-encoding');
 
     const body = await upstream.arrayBuffer();

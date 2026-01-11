@@ -3,6 +3,9 @@ package handlers
 import (
 	"encoding/json"
 	"log"
+	"os"
+	"strings"
+	"sync"
 
 	"avalon/internal/services"
 
@@ -10,8 +13,34 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+var (
+	wsAllowedOriginsOnce sync.Once
+	wsAllowedOrigins     []string
+)
+
+func loadWSAllowedOrigins() {
+	wsAllowedOriginsOnce.Do(func() {
+		origins := strings.TrimSpace(os.Getenv("CORS_ORIGINS"))
+		if origins == "" {
+			return
+		}
+		for _, o := range strings.Split(origins, ",") {
+			o = strings.TrimSpace(o)
+			if o == "" {
+				continue
+			}
+			wsAllowedOrigins = append(wsAllowedOrigins, o)
+		}
+	})
+}
+
 // websocketHandler handles WebSocket connections
 func websocketHandler(hub *services.Hub, gameService *services.GameService) fiber.Handler {
+	loadWSAllowedOrigins()
+	cfg := websocket.Config{}
+	if len(wsAllowedOrigins) > 0 {
+		cfg.Origins = wsAllowedOrigins
+	}
 	return websocket.New(func(c *websocket.Conn) {
 		// Extract JWT token from query parameters
 		token := c.Query("token")
@@ -168,5 +197,5 @@ func websocketHandler(hub *services.Hub, gameService *services.GameService) fibe
 
 		// Unregister client when connection is closed
 		hub.UnregisterClient(client)
-	})
+	}, cfg)
 }

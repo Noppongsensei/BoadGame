@@ -17,7 +17,7 @@ export default function RoomPage() {
   
   const { user, token, isAuthenticated } = useAuthStore();
   const { currentRoom, isLoading: isRoomLoading, error: roomError, fetchRoom, joinRoom, leaveRoom, startGame } = useRoomStore();
-  const { initGame, connectWebSocket } = useGameStore();
+  const { initGame, connectWebSocket, disconnectWebSocket } = useGameStore();
   
   const [isJoining, setIsJoining] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
@@ -60,7 +60,11 @@ export default function RoomPage() {
         router.replace(`/rooms/${storedRoomId}`);
       }
     }
-  }, [isAuthenticated, router, roomId, fetchRoom, token, connectWebSocket, pathname]);
+
+	return () => {
+		disconnectWebSocket();
+	};
+  }, [isAuthenticated, router, roomId, fetchRoom, token, connectWebSocket, pathname, disconnectWebSocket]);
   
   // Handle joining room
   const handleJoinRoom = async () => {

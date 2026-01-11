@@ -125,79 +125,106 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       currentSocket.close();
     }
 
-    // Build WebSocket URL
-    let wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws?token=${token}`;
-    if (roomId) {
-      wsUrl += `&room_id=${roomId}`;
-    }
+    (async () => {
+      let baseWsUrl = process.env.NEXT_PUBLIC_WS_URL;
 
-    // Create new WebSocket connection
-    const socket = new WebSocket(wsUrl);
-
-    // Set up event handlers
-    socket.onopen = () => {
-      set({ socket, isConnected: true, error: null });
-      console.log('WebSocket connected');
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-
-        // Handle different message types
-        switch (message.type) {
-          case 'game.state_update':
-            // Update game state when server sends an update
-            set({ gameState: message.payload });
-            break;
-
-          case 'room.player_joined':
-          case 'room.player_left':
-          case 'room.updated':
-            // Fetch room data to update player list or room status
-            if (message.room_id) {
-              // Use roomStore to update currentRoom
-              const roomStore = useRoomStore.getState();
-              roomStore.fetchRoom(message.room_id);
-              console.log(`Room updated: ${message.type}`);
+      if (!baseWsUrl) {
+        try {
+          const res = await fetch('/api/ws-url', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.ws_url) {
+              baseWsUrl = data.ws_url;
             }
-            break;
-
-          case 'room.game_started':
-            // Handle game start notification (redirect non-host players)
-            if (message.room_id) {
-              const roomStore = useRoomStore.getState();
-              roomStore.fetchRoom(message.room_id);
-
-              // If this is sent to all players, they can navigate to game
-              if (typeof window !== 'undefined') {
-                window.location.href = `/game/${message.room_id}`;
-              }
-            }
-            break;
-
-          case 'system.error':
-            set({ error: message.payload?.message || 'Server error' });
-            break;
-
-          // Add more message type handlers as needed
+          }
+        } catch {
         }
-      } catch (error) {
-        console.error('Error processing WebSocket message:', error);
       }
-    };
 
-    socket.onclose = () => {
-      set({ isConnected: false });
-      console.log('WebSocket disconnected');
-    };
+      if (!baseWsUrl) {
+        baseWsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+      }
 
-    socket.onerror = (error) => {
-      set({ error: 'WebSocket error' });
-      console.error('WebSocket error:', error);
-    };
+      const params = new URLSearchParams();
+      params.set('token', token);
+      if (roomId) {
+        params.set('room_id', roomId);
+      }
 
-    set({ socket });
+      const wsUrl = `${baseWsUrl}?${params.toString()}`;
+
+      // Create new WebSocket connection
+      const socket = new WebSocket(wsUrl);
+
+      // Set up event handlers
+      socket.onopen = () => {
+        set({ socket, isConnected: true, error: null });
+        console.log('WebSocket connected');
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+
+          // Handle different message types
+          switch (message.type) {
+            case 'game.state_update':
+              // Update game state when server sends an update
+              set({ gameState: message.payload });
+              break;
+
+            case 'room.player_joined':
+            case 'room.player_left':
+            case 'room.updated':
+              // Fetch room data to update player list or room status
+              if (message.room_id) {
+                // Use roomStore to update currentRoom
+                const roomStore = useRoomStore.getState();
+                roomStore.fetchRoom(message.room_id);
+                console.log(`Room updated: ${message.type}`);
+              }
+              break;
+
+            case 'room.game_started':
+              // Handle game start notification (redirect non-host players)
+              if (message.room_id) {
+                const roomStore = useRoomStore.getState();
+                roomStore.fetchRoom(message.room_id);
+
+                // If this is sent to all players, they can navigate to game
+                if (typeof window !== 'undefined') {
+                  window.location.href = `/game/${message.room_id}`;
+                }
+              }
+              break;
+
+            case 'system.error':
+              set({ error: message.payload?.message || 'Server error' });
+              break;
+
+            // Add more message type handlers as needed
+          }
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+
+      socket.onclose = () => {
+        set({ isConnected: false });
+        console.log('WebSocket disconnected');
+      };
+
+      socket.onerror = (error) => {
+        set({ error: 'WebSocket error' });
+        console.error('WebSocket error:', error);
+      };
+
+      set({ socket });
+    })();
   },
 
   // Disconnect WebSocket
