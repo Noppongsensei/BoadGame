@@ -25,10 +25,7 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: API_URL
-        fromService:
-          type: web
-          name: avalon-backend
-          property: hostport
+        value: http://avalon-backend:8080
 
 databases:
   - name: avalon-db
