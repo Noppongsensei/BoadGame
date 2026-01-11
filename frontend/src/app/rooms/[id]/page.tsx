@@ -7,7 +7,7 @@ import { ArrowLeft, Users, Play, Loader, UserPlus } from 'lucide-react';
 
 import { useAuthStore } from '@/store/authStore';
 import { useRoomStore } from '@/store/roomStore';
-import { useGameStore, type WSMessage } from '@/store/gameStore';
+import { useGameStore } from '@/store/gameStore';
 
 export default function RoomPage() {
   const router = useRouter();
@@ -106,17 +106,6 @@ export default function RoomPage() {
       // Initialize the game session
       await initGame(roomId, 'avalon');
       console.log('Game session initialized');
-      
-      // Send WebSocket notification that game started (for all players)
-      if (token) {
-        console.log('Sending WebSocket notification');
-        const gameStore = useGameStore.getState();
-        gameStore.sendMessage({
-          type: 'room.game_started',
-          room_id: roomId,
-          payload: { status: 'playing' }
-        });
-      }
       
       // Navigate to game page - use direct navigation instead of router
       // This ensures we definitely navigate even if there's an issue with Next.js router

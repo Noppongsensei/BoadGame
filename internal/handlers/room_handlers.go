@@ -3,21 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"strconv"
-	"strings"
 
 	"avalon/internal/services"
 
 	"github.com/gofiber/fiber/v2"
 )
-
-// extractClaims extracts claims from a JWT token
-func extractClaims(token string) *Claims {
-	claims, err := parseJWTClaims(token)
-	if err != nil {
-		return nil
-	}
-	return claims
-}
 
 // Room request/response structs
 type CreateRoomRequest struct {
@@ -28,16 +18,8 @@ type CreateRoomRequest struct {
 // createRoomHandler handles POST requests for creating a new room
 func createRoomHandler(roomService *services.RoomService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Authenticate request
-		token := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
-		if token == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Authorization token required",
-			})
-		}
-
-		userID, err := validateJWT(token)
-		if err != nil {
+		userID, ok := c.Locals("userID").(string)
+		if !ok || userID == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid token",
 			})
@@ -149,16 +131,8 @@ func joinRoomHandler(roomService *services.RoomService, hub *services.Hub) fiber
 		// Get room ID from URL
 		roomID := c.Params("id")
 
-		// Authenticate request
-		token := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
-		if token == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Authorization token required",
-			})
-		}
-
-		userID, err := validateJWT(token)
-		if err != nil {
+		userID, ok := c.Locals("userID").(string)
+		if !ok || userID == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid token",
 			})
@@ -184,7 +158,7 @@ func joinRoomHandler(roomService *services.RoomService, hub *services.Hub) fiber
 		}
 
 		// Send WebSocket notification to all clients in the room
-		claims := extractClaims(token)
+		claims, _ := c.Locals("claims").(*Claims)
 		if claims != nil && hub != nil {
 			payload, _ := json.Marshal(map[string]interface{}{
 				"username": claims.Username,
@@ -212,23 +186,15 @@ func leaveRoomHandler(roomService *services.RoomService, hub *services.Hub) fibe
 		// Get room ID from URL
 		roomID := c.Params("id")
 
-		// Authenticate request
-		token := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
-		if token == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Authorization token required",
-			})
-		}
-
-		userID, err := validateJWT(token)
-		if err != nil {
+		userID, ok := c.Locals("userID").(string)
+		if !ok || userID == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid token",
 			})
 		}
 
 		// Send WebSocket notification before leaving
-		claims := extractClaims(token)
+		claims, _ := c.Locals("claims").(*Claims)
 		if claims != nil && hub != nil {
 			payload, _ := json.Marshal(map[string]string{
 				"username": claims.Username,
@@ -268,16 +234,8 @@ func startGameHandler(roomService *services.RoomService, hub *services.Hub) fibe
 		// Get room ID from URL
 		roomID := c.Params("id")
 
-		// Authenticate request
-		token := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
-		if token == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Authorization token required",
-			})
-		}
-
-		userID, err := validateJWT(token)
-		if err != nil {
+		userID, ok := c.Locals("userID").(string)
+		if !ok || userID == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid token",
 			})
@@ -326,15 +284,8 @@ func getRoomPlayersHandler(roomService *services.RoomService) fiber.Handler {
 		// Get room ID from URL
 		roomID := c.Params("id")
 
-		// Authenticate request
-		token := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
-		if token == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Authorization token required",
-			})
-		}
-		userID, err := validateJWT(token)
-		if err != nil {
+		userID, ok := c.Locals("userID").(string)
+		if !ok || userID == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid token",
 			})

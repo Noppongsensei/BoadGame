@@ -68,6 +68,20 @@ func parseJWTClaims(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
+func authRequired() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		claims, err := parseJWTClaims(c.Get("Authorization"))
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Invalid token",
+			})
+		}
+		c.Locals("userID", claims.UserID)
+		c.Locals("claims", claims)
+		return c.Next()
+	}
+}
+
 // Claims represents JWT claims
 type Claims struct {
 	UserID   string `json:"user_id"`

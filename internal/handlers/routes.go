@@ -22,6 +22,8 @@ func SetupRoutes(
 	auth.Post("/register", registerHandler(userService))
 	auth.Post("/login", loginHandler(userService))
 
+	api.Use(authRequired())
+
 	// User routes
 	users := api.Group("/users")
 	users.Get("/:id", getUserHandler(userService))
