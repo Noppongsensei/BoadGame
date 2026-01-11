@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -18,9 +19,14 @@ func NewPostgresDB() (*PostgresDB, error) {
 	// Prefer DATABASE_URL when provided (common on Fly.io and other hosts)
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL != "" {
+		// Parse connection string to handle SSL mode correctly for Render
+		// If using external URL (ends with .onrender.com), enforce sslmode=require
+		// If using internal URL (avalon-db...), sslmode=disable is usually fine, but Render recommends require
+
+		// Simple approach: trust the DATABASE_URL provided by platform but ensure sslmode is set if missing
 		connStr := databaseURL
-		if !hasSSLMode(connStr) {
-			if hasQuery(connStr) {
+		if !strings.Contains(connStr, "sslmode=") {
+			if strings.Contains(connStr, "?") {
 				connStr += "&sslmode=require"
 			} else {
 				connStr += "?sslmode=require"
@@ -60,36 +66,6 @@ func NewPostgresDB() (*PostgresDB, error) {
 	}
 
 	return &PostgresDB{db}, nil
-}
-
-func hasQuery(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '?' {
-			return true
-		}
-	}
-	return false
-}
-
-func hasSSLMode(s string) bool {
-	// Simple contains check without importing strings
-	needle := "sslmode="
-	if len(s) < len(needle) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(needle); i++ {
-		match := true
-		for j := 0; j < len(needle); j++ {
-			if s[i+j] != needle[j] {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
 }
 
 // InitSchema initializes the database schema if it doesn't exist
