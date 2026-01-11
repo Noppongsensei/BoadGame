@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import axios from 'axios';
+import apiClient from '../lib/axios';
 import { useRoomStore } from './roomStore';
 
 // Define game state types
@@ -75,7 +75,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   initGame: async (roomId: string, gameType: string = 'avalon') => {
     try {
       set({ isLoading: true, error: null });
-      await axios.post(`/api/games/${roomId}/init`, { game_type: gameType });
+      await apiClient.post(`/api/games/${roomId}/init`, { game_type: gameType });
       set({ isLoading: false });
     } catch (error: any) {
       set({
@@ -90,7 +90,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   getGameState: async (roomId: string) => {
     try {
       set({ isLoading: true, error: null });
-      const response = await axios.get(`/api/games/${roomId}/state`);
+      const response = await apiClient.get(`/api/games/${roomId}/state`);
       set({ gameState: response.data, isLoading: false });
     } catch (error: any) {
       set({
@@ -105,7 +105,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
   getGameHistory: async (roomId: string) => {
     try {
       set({ isLoading: true, error: null });
-      const response = await axios.get(`/api/games/${roomId}/history`);
+      const response = await apiClient.get(`/api/games/${roomId}/history`);
       set({ isLoading: false });
       return response.data.history;
     } catch (error: any) {
@@ -143,14 +143,14 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     socket.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        
+
         // Handle different message types
         switch (message.type) {
           case 'game.state_update':
             // Update game state when server sends an update
             set({ gameState: message.payload });
             break;
-            
+
           case 'room.player_joined':
           case 'room.player_left':
           case 'room.updated':
@@ -162,24 +162,24 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
               console.log(`Room updated: ${message.type}`);
             }
             break;
-            
+
           case 'room.game_started':
             // Handle game start notification (redirect non-host players)
             if (message.room_id) {
               const roomStore = useRoomStore.getState();
               roomStore.fetchRoom(message.room_id);
-              
+
               // If this is sent to all players, they can navigate to game
               if (typeof window !== 'undefined') {
                 window.location.href = `/game/${message.room_id}`;
               }
             }
             break;
-          
+
           case 'system.error':
             set({ error: message.payload?.message || 'Server error' });
             break;
-            
+
           // Add more message type handlers as needed
         }
       } catch (error) {
@@ -271,3 +271,4 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
     get().sendMessage(message);
   }
 }));
+

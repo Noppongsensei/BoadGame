@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"avalon/internal/handlers"
+	"avalon/internal/middleware"
 	"avalon/internal/repositories"
 	"avalon/internal/services"
 
@@ -60,6 +61,8 @@ func main() {
 	// Setup Fiber app
 	app := fiber.New()
 
+	// Add request ID middleware for tracing
+	app.Use(middleware.RequestIDMiddleware())
 	// Middleware
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{

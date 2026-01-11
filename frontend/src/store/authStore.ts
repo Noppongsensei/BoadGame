@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import axios from 'axios';
+import apiClient from '../lib/axios';
 
 // Define the user type
 interface User {
@@ -34,25 +34,23 @@ export const useAuthStore = create<AuthState>()(
       login: async (username: string, password: string) => {
         try {
           set({ isLoading: true, error: null });
-          const response = await axios.post('/api/auth/login', { username, password });
+          const response = await apiClient.post('/api/auth/login', { username, password });
           const { user, token } = response.data;
-          
-          set({ 
-            user, 
+
+          set({
+            user,
             token,
             isAuthenticated: true,
-            isLoading: false 
+            isLoading: false
           });
-          
-          // Set the token in axios default headers
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+          // Store token in localStorage for interceptor
+          localStorage.setItem('token', token);
         } catch (error: unknown) {
-          const errorMessage = axios.isAxiosError(error)
-            ? (error.response?.data as any)?.error || 'Failed to login'
-            : 'Failed to login';
-          set({ 
-            isLoading: false, 
-            error: errorMessage 
+          const errorMessage = (error as any)?.response?.data?.error || 'Failed to login';
+          set({
+            isLoading: false,
+            error: errorMessage
           });
           throw error;
         }
@@ -62,25 +60,23 @@ export const useAuthStore = create<AuthState>()(
       register: async (username: string, password: string) => {
         try {
           set({ isLoading: true, error: null });
-          const response = await axios.post('/api/auth/register', { username, password });
+          const response = await apiClient.post('/api/auth/register', { username, password });
           const { user, token } = response.data;
-          
-          set({ 
-            user, 
+
+          set({
+            user,
             token,
             isAuthenticated: true,
-            isLoading: false 
+            isLoading: false
           });
-          
-          // Set the token in axios default headers
-          axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+          // Store token in localStorage for interceptor
+          localStorage.setItem('token', token);
         } catch (error: unknown) {
-          const errorMessage = axios.isAxiosError(error)
-            ? (error.response?.data as any)?.error || 'Failed to register'
-            : 'Failed to register';
-          set({ 
-            isLoading: false, 
-            error: errorMessage 
+          const errorMessage = (error as any)?.response?.data?.error || 'Failed to register';
+          set({
+            isLoading: false,
+            error: errorMessage
           });
           throw error;
         }
@@ -88,14 +84,14 @@ export const useAuthStore = create<AuthState>()(
 
       // Logout function
       logout: () => {
-        set({ 
-          user: null, 
-          token: null, 
-          isAuthenticated: false 
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false
         });
-        
-        // Remove the token from axios default headers
-        delete axios.defaults.headers.common['Authorization'];
+
+        // Remove the token from localStorage
+        localStorage.removeItem('token');
       }
     }),
     {
@@ -105,16 +101,10 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// Initialize axios with the token from storage on app load
+// Initialize token from storage on app load
 if (typeof window !== 'undefined') {
   const storedState = JSON.parse(localStorage.getItem('auth-storage') || '{}');
   if (storedState?.state?.token) {
-    axios.defaults.headers.common['Authorization'] = `Bearer ${storedState.state.token}`;
+    localStorage.setItem('token', storedState.state.token);
   }
 }
-
-// Set default axios base URL
-axios.defaults.baseURL =
-  typeof window !== 'undefined'
-    ? ''
-    : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';

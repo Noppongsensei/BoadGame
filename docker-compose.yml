@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build:
@@ -9,12 +7,8 @@ services:
       - "8080:8080"
     depends_on:
       - postgres
-    environment:
-      - DB_HOST=postgres
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=avalon
-      - DB_PORT=5432
+    env_file:
+      - .env
     restart: unless-stopped
     networks:
       - avalon-network
@@ -33,9 +27,37 @@ services:
     networks:
       - avalon-network
 
-volumes:
-  postgres-data:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - avalon-network
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - app
+      - frontend
+    networks:
+      - avalon-network
 
 networks:
   avalon-network:
     driver: bridge
+
+volumes:
+  postgres-data:

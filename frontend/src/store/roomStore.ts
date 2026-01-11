@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import axios from 'axios';
+import apiClient from '../lib/axios';
 
 // Define room and player types
 interface Player {
@@ -44,13 +44,13 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   fetchRooms: async () => {
     try {
       set({ isLoading: true, error: null });
-      const response = await axios.get('/api/rooms');
+      const response = await apiClient.get('/api/rooms');
       const rooms = Array.isArray(response.data?.rooms) ? response.data.rooms : [];
       set({ rooms, isLoading: false });
     } catch (error: any) {
-      set({ 
-        isLoading: false, 
-        error: error.response?.data?.error || 'Failed to fetch rooms' 
+      set({
+        isLoading: false,
+        error: error.response?.data?.error || 'Failed to fetch rooms'
       });
     }
   },
@@ -59,13 +59,13 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   fetchOpenRooms: async () => {
     try {
       set({ isLoading: true, error: null });
-      const response = await axios.get('/api/rooms/open');
+      const response = await apiClient.get('/api/rooms/open');
       const rooms = Array.isArray(response.data?.rooms) ? response.data.rooms : [];
       set({ rooms, isLoading: false });
     } catch (error: any) {
-      set({ 
-        isLoading: false, 
-        error: error.response?.data?.error || 'Failed to fetch open rooms' 
+      set({
+        isLoading: false,
+        error: error.response?.data?.error || 'Failed to fetch open rooms'
       });
     }
   },
@@ -74,20 +74,20 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   createRoom: async (name: string, maxPlayers: number) => {
     try {
       set({ isLoading: true, error: null });
-      const response = await axios.post('/api/rooms', { name, max_players: maxPlayers });
+      const response = await apiClient.post('/api/rooms', { name, max_players: maxPlayers });
       const newRoom = response.data;
-      
-      set(state => ({ 
+
+      set(state => ({
         rooms: [...(Array.isArray(state.rooms) ? state.rooms : []), newRoom],
         currentRoom: newRoom,
-        isLoading: false 
+        isLoading: false
       }));
-      
+
       return newRoom;
     } catch (error: any) {
-      set({ 
-        isLoading: false, 
-        error: error.response?.data?.error || 'Failed to create room' 
+      set({
+        isLoading: false,
+        error: error.response?.data?.error || 'Failed to create room'
       });
       throw error;
     }
@@ -97,12 +97,12 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   joinRoom: async (roomId: string) => {
     try {
       set({ isLoading: true, error: null });
-      const response = await axios.post(`/api/rooms/${roomId}/join`);
+      const response = await apiClient.post(`/api/rooms/${roomId}/join`);
       set({ currentRoom: response.data, isLoading: false });
     } catch (error: any) {
-      set({ 
-        isLoading: false, 
-        error: error.response?.data?.error || 'Failed to join room' 
+      set({
+        isLoading: false,
+        error: error.response?.data?.error || 'Failed to join room'
       });
       throw error;
     }
@@ -112,12 +112,12 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   leaveRoom: async (roomId: string) => {
     try {
       set({ isLoading: true, error: null });
-      await axios.post(`/api/rooms/${roomId}/leave`);
+      await apiClient.post(`/api/rooms/${roomId}/leave`);
       set({ currentRoom: null, isLoading: false });
     } catch (error: any) {
-      set({ 
-        isLoading: false, 
-        error: error.response?.data?.error || 'Failed to leave room' 
+      set({
+        isLoading: false,
+        error: error.response?.data?.error || 'Failed to leave room'
       });
       throw error;
     }
@@ -127,12 +127,12 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   startGame: async (roomId: string) => {
     try {
       set({ isLoading: true, error: null });
-      const response = await axios.post(`/api/rooms/${roomId}/start`);
+      const response = await apiClient.post(`/api/rooms/${roomId}/start`);
       set({ currentRoom: response.data, isLoading: false });
     } catch (error: any) {
-      set({ 
-        isLoading: false, 
-        error: error.response?.data?.error || 'Failed to start game' 
+      set({
+        isLoading: false,
+        error: error.response?.data?.error || 'Failed to start game'
       });
       throw error;
     }
@@ -142,14 +142,15 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   fetchRoom: async (roomId: string) => {
     try {
       set({ isLoading: true, error: null });
-      const response = await axios.get(`/api/rooms/${roomId}`);
+      const response = await apiClient.get(`/api/rooms/${roomId}`);
       set({ currentRoom: response.data, isLoading: false });
     } catch (error: any) {
-      set({ 
-        isLoading: false, 
-        error: error.response?.data?.error || 'Failed to fetch room' 
+      set({
+        isLoading: false,
+        error: error.response?.data?.error || 'Failed to fetch room'
       });
       throw error;
     }
   }
 }));
+
